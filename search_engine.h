@@ -1,6 +1,8 @@
 #ifndef SEARCH_ENGINE_H
 #define SEARCH_ENGINE_H
 /*
+ * search_engine.h version 1.0
+ *
  * Simple single-header and single-c search engine library
  * which lets you use prefix/infix/suffix (partial) search
  * on keys for which you provide values.

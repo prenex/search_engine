@@ -87,3 +87,14 @@ See details in the files themselves.
 
 * More sophisticated writeup of LICENCE
 * Maybe ability to delete from the engine? Currently you rebuild all for now.
+* Maybe I could add "suffix tree" generation for searching any common substr?
+* search_engine_2 data structures and functions workin on many engines!
+
+The search_engine_2 is a good idea, because we can then split maybe the whole
+database into 16 number of search_engines which likely all work in the fast
+paths always and with better cache optimality, so likely with a little bit of
+an overhead of having multiple engines for book-keeping you get a much better
+performance out of the whole when storing really much data. I think this is a
+good thing to write. OR EVEN BETTER: maybe we should somehow organize the code
+to be able to use both search_engines and search_engine2s in search_engine2s
+which in turn gives us practically "endless" scalability.
