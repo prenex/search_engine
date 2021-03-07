@@ -188,12 +188,12 @@ setlocal wrap
 setlocal wrapmargin=0
 silent! normal! zE
 let &fdl = &fdl
-let s:l = 48 - ((47 * winheight(0) + 28) / 56)
+let s:l = 1 - ((0 * winheight(0) + 28) / 56)
 if s:l < 1 | let s:l = 1 | endif
 keepjumps exe s:l
 normal! zt
-keepjumps 48
-normal! 077|
+keepjumps 1
+normal! 0
 tabnext
 edit search_engine.h
 set splitbelow splitright
@@ -205,6 +205,8 @@ set winheight=1
 set winminwidth=0
 set winwidth=1
 argglobal
+1argu
+if bufexists("search_engine.h") | buffer search_engine.h | else | edit search_engine.h | endif
 balt search_engine.c
 setlocal keymap=
 setlocal noarabic
@@ -332,12 +334,12 @@ setlocal wrap
 setlocal wrapmargin=0
 silent! normal! zE
 let &fdl = &fdl
-let s:l = 43 - ((42 * winheight(0) + 28) / 56)
+let s:l = 48 - ((46 * winheight(0) + 28) / 56)
 if s:l < 1 | let s:l = 1 | endif
 keepjumps exe s:l
 normal! zt
-keepjumps 43
-normal! 09|
+keepjumps 48
+normal! 035|
 tabnext
 edit search_engine.c
 set splitbelow splitright
@@ -349,7 +351,6 @@ set winheight=1
 set winminwidth=0
 set winwidth=1
 argglobal
-if bufexists("search_engine.c") | buffer search_engine.c | else | edit search_engine.c | endif
 balt search_engine.h
 setlocal keymap=
 setlocal noarabic
@@ -477,17 +478,17 @@ setlocal wrap
 setlocal wrapmargin=0
 silent! normal! zE
 let &fdl = &fdl
-let s:l = 27 - ((26 * winheight(0) + 28) / 56)
+let s:l = 391 - ((50 * winheight(0) + 28) / 56)
 if s:l < 1 | let s:l = 1 | endif
 keepjumps exe s:l
 normal! zt
-keepjumps 27
-normal! 0
-tabnext 1
+keepjumps 391
+normal! 020|
+tabnext 3
 set stal=1
-badd +0 search_engine.c
-badd +0 search_engine.h
-badd +0 README.md
+badd +48 README.md
+badd +1 search_engine.c
+badd +1 search_engine.h
 if exists('s:wipebuf') && len(win_findbuf(s:wipebuf)) == 0
   silent exe 'bwipe ' . s:wipebuf
 endif
