@@ -345,6 +345,7 @@ static void value_set_add(
 		value_set *vs,
 		index_valuesbuf_pair p,
 		metachar *key_end_ptr) {
+
 	/* Find and set metabits - this corresponds metachar with values! */
 	SE_UCHAR metabits = generate_meta_bits_for(vs);
 	set_meta_bits(key_end_ptr, metabits);
@@ -362,6 +363,33 @@ static void value_set_add(
 	if(!find_res) {
 		add_to_bucket(bucket, p);
 	}
+}
+
+/**
+ * SET: Returns the existing index_valuesbuf_pair for the given metachar.
+ *
+ * Returns NULL when not found (should not happen in search engine generally).
+ */
+static index_valuesbuf_pair *value_set_get(
+		value_set *vs,
+		metachar *key_end_ptr) {
+
+	/* Calculate metahash and find hash bucket */
+	metahash hash = hash_metachar(key_end_ptr);
+	index_valuesbuf_pair *bucket = get_bucket(vs, hash);
+
+	/* Find if data is already in the bucket */
+	index_valuesbuf_pair *find_res = find_in_bucket(
+			bucket,
+			p.key_end_index);
+
+	if(!find_res) {
+		/* Happy case */
+		return find_res;
+	}
+
+	/* Sad case */
+	return NULL;
 }
 
 /** 
@@ -409,7 +437,7 @@ void *search_engine_init(SE_BOOL substr_support) {
 	return NULL;
 }
 
-/** Close down the given search engine handl handle */
+/** Close down the given search engine handle */
 void search_engine_shutdown(void *handle) {
 	/* TODO */
 }
