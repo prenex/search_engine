@@ -85,6 +85,8 @@ See details in the files themselves.
 
 # TODO
 
+Currently not even working yet. Need to finish.
+
 * More sophisticated writeup of LICENCE
 * Maybe ability to delete from the engine? Currently you rebuild all for now.
 * Maybe I could add "suffix tree" generation for searching any common substr?
