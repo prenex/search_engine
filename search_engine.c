@@ -217,6 +217,7 @@ struct metahash {
 /** The values for the keys are stored here - support few-value optimization */
 struct value_set {
 	/* TODO: Maybe make it possible to sort lists for binary search */
+	/* TODO: Or maybe do some closed/open hashing in a grown vector etc. */
 	/**
 	 * Value buckets. See metachar docs for further understanding!
 	 *
