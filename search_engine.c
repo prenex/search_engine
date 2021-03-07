@@ -342,9 +342,9 @@ static int add_to_bucket(
  * - CHANGES and the lower 6 bits in meta of the related metachar!
  */
 static void value_set_add(
+		value_set *vs,
 		index_valuesbuf_pair p,
-		metachar *key_end_ptr,
-		value_set *vs) {
+		metachar *key_end_ptr) {
 	/* Find and set metabits - this corresponds metachar with values! */
 	SE_UCHAR metabits = generate_meta_bits_for(vs);
 	set_meta_bits(key_end_ptr, metabits);
