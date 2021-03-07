@@ -167,28 +167,28 @@ struct metachar {
 /** The internal prefix tree with substring lookup support */
 struct prefix_tree {
 	/**
-	 * Points into the main metachar-strechybuffer for starting char/bytes.
+	 * Indices into the main metachar-strechybuffer for start char/bytes.
 	 *
-	 * 256 pointers to starts of keys practically.
+	 * 256 indices to starts of keys practically.
 	 *
 	 * Practically the start-characters of all texts from beginning.
 	 * Here NULL (nullptr) means no key starts like that char / byte.
 	 *
-	 * For example top_levels['a'] points to the top-level prefix-tree/trie
+	 * For example top_levels['a'] indexes the top-level prefix-tree/trie
 	 * node where all keys are hooked up that start with an 'a' char...
 	 */
-	metachar *top_levels[256] = { 0 }; // zero-init all ptrs
+	SE_DWORD top_levels[256] = { 0 }; // zero-init all ptrs
 
 	/**
 	 * Substring start position lists for each char.
 	 *
-	 * 256 pointers to "lists" (strechy_buffers) of pointers for each
+	 * 256 indices to "lists" (strechy_buffers) of indices for each
 	 * possible char start for substring support. This is 256 lists and
 	 * all lists contains their character occurences in the prefix-tree.
 	 *
-	 * For example substr_starts['a'] is a stretchy_buffer of metachar*
-	 * pointers and all of those pointers point to places that are part of
-	 * keys with 'a' at the pointed location. Using this, we can find all
+	 * For example substr_starts['a'] is a stretchy_buffer of metachar
+	 * indices and all of those indices direct to places that are part of
+	 * keys with 'a' at the indexed location. Using this, we can find all
 	 * substring locations that we should look for when searching substrs.
 	 *
 	 * Just empty when unused: nullptrs and no heap usage when we do not
@@ -197,13 +197,13 @@ struct prefix_tree {
 	 * Here NULL means that no key in the whole "database" has that given
 	 * byte / char ANYWHERE in them currently.
 	 */
-	metachar **substr_starts[256] = { 0 }; // zero-init all ptrs
+	SE_DWORD *substr_starts[256] = { 0 }; // zero-init all ptrs
 };
 
 /** Metachar ptr for the key endings and the corresponding value stretchbuf */
-struct ptr_valuesbuf_pair {
+struct index_valuesbuf_pair {
 	/** Compare this with metachar addresses having meta==255 to fit */
-	metachar *key_end_ptr;
+	SE_DWORD key_end_index;
 	/** In case there is a fit, this is strechybuf of result values */
 	void **valuesbuf;
 };
@@ -225,57 +225,52 @@ struct value_set {
 	 * - Use metahash hash_metachar(metachar *mc) to get hash key (indexin)
 	 * - After found the right bucket, just linear search in it.
 	 */
-	ptr_valuesbuf_pair *buckets[1024]; /* See: (*****) */
+	index_valuesbuf_pair *buckets[1024]; /* See: (*****) */
 
 	/** Number of currently stored values - used for meta-generation */
 	unsigned int value_num;
 };
 
-/** Helper fun */
+/** META-Helper fun */
 static SE_BOOL get_child_sign(SE_UCHAR meta) {
 	return ((meta & 0x80) != 0) ? se_true : se_false;
 }
 
-/** Helper fun */
+/** META-Helper fun */
 static void set_child_sign(SE_UCHAR *meta_to_change, SE_BOOL value) {
 	meta_to_change = (value) ?
 		(meta_to_change | 0x80):
 		(meta_to_change & 0x7F);
 }
 
-/** Helper fun */
+/** META-Helper fun */
 static SE_BOOL get_next_sign(SE_UCHAR meta) {
 	return ((meta & 0x40) != 0) ? se_true : se_false;
 }
 
-/** Helper fun */
+/** META-Helper fun */
 static void set_next_sign(SE_UCHAR *meta_to_change, SE_BOOL value) {
 	meta_to_change = (value) ?
 		(meta_to_change | 0x40):
 		(meta_to_change & 0xbF);
 }
 
-/** Helper fun: returns low 6 bits only */
+/** META-Helper fun: returns low 6 bits only */
 static SE_UCHAR get_meta_bits(SE_UCHAR meta) {
 	return meta &= 0x3F;
 }
 
 
-/** Helper fun: Sets low 6 bits to given 6-bit value (handles 6b overflow) */
+/** META-Helper fun: Sets low 6 bits to given 6-bit val (handle 6b overflow) */
 static void set_meta_bits(SE_UCHAR *meta_to_change, SE_UCHAR value) {
 	value = get_meta_bits(value) /* defensive code */
 	*meta_to_change &= 0xc0; /* Erase all but top two bits */
 	*meta_to_change |= value; /* Set the 6 bits */
 }
 
-/** HASH: Helper fun */
+/** HASH-Helper fun */
 static metahash hash_metachar(metachar *mc) {
 	metahash mh;
-
-	/* TODO: Can complicate this further if more range needed, in the
-	 *       worst case can even use the address of the pointer, but
-	 *       first just the unused bits from the "kar".
-	 */
 
 	/* Currently: 10 bit [0..1023] bucket indices.
 	 * - 4 bitz from the last char of in the prefixtree
@@ -292,9 +287,81 @@ static metahash hash_metachar(metachar *mc) {
 	return mh;
 }
 
-/** Helper to get lower bits of "meta" generated on new key ends */
+/** SET-Helper to get lower bits of "meta" generated on new key ends */
 static SE_UCHAR generate_meta_bits_for(value_set *current_value_set) {
 	return get_meta_bits((SE_UCHAR)current_value_set->value_num);
+}
+
+/** SET-Helper: Gets the hash bucket for the given "metahash" value */
+static index_valuesbuf_pair *get_bucket(value_set *vs, metahash mh) {
+	// TODO: if hashing becomes more complex, change it here!
+	RETURN Vs->buckets[mh.index];
+}
+
+/**
+ * SET-BUCKET-Helper: FIND BY INDEX of metachar in the given hash bucket.
+ *
+ * Rem.: bucket needs to be a "strechy buffer", result is a pointer in it.
+ *
+ * Returns NULL in case there was no finding!
+ */
+static index_valuesbuf_pair *find_in_bucket(
+	       index_valuesbuf_pair *bucket,
+	       SE_DWORD end_index_to_find) {
+	/* Bucket is a stretchy buffer, get current size */
+	int bc = sb_count(bucket);
+
+	/* Regular linear search */
+	for(int i = 0; i < bc; ++i) {
+		if(bucket[i].key_end_index == end_index_to_find) {
+			return (bucket+i); // fast
+		}
+	}
+
+	/* Not found */
+	return NULL;
+}
+
+/**
+ * SET-BUCKET-Helper: Adds elem to the end of the bucket and return its index.
+ *
+ * Rem.: bucket needs to be a "strechy buffer", result is a pointer in it.
+ */
+static int add_to_bucket(
+		index_valuesbuf_pair *bucket,
+		index_valuesbuf_pair p) {
+	int index = sb_count(bucket);
+	sb_push(bucket, p);
+	return index;
+}
+
+/**
+ * SET: Adds the given pair to the value-set.
+ *
+ * - p should have its p.key_end_index already on a valid trie address!
+ * - CHANGES and the lower 6 bits in meta of the related metachar!
+ */
+static void value_set_add(
+		index_valuesbuf_pair p,
+		metachar *key_end_ptr,
+		value_set *vs) {
+	/* Find and set metabits - this corresponds metachar with values! */
+	SE_UCHAR metabits = generate_meta_bits_for(vs);
+	set_meta_bits(key_end_ptr, metabits);
+
+	/* Calculate metahash and find hash bucket */
+	metahash hash = hash_metachar(key_end_ptr);
+	index_valuesbuf_pair *bucket = get_bucket(vs, hash);
+
+	/* Find if data is already in the bucket */
+	index_valuesbuf_pair *find_res = find_in_bucket(
+			bucket,
+			p.key_end_index);
+
+	/* Add only if not yet added */
+	if(!find_res) {
+		add_to_bucket(bucket, p);
+	}
 }
 
 /** 

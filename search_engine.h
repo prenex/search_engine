@@ -36,6 +36,7 @@
 #define SE_CHAR int8_t
 #define SE_WORD uint16_t
 #define SE_DWORD uint32_t
+#define SE_SIZET size_t
 
 #else
 
@@ -44,6 +45,7 @@
 #define SE_UCHAR char
 #define SE_WORD unsigned short
 #define SE_DWORD unsigned int
+#define SE_SIZET unsigned long long
 
 #endif /* NO_MODERN_TYPEZ */
 
