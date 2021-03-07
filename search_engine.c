@@ -1,5 +1,5 @@
 /*
- * search_engine.c version 1.0
+ * search_engine.c version 0.2
  *
  * Simple single-header and single-c search engine library
  * which lets you use prefix/infix/suffix (partial) search
@@ -86,10 +86,10 @@ static void * stb__sbgrowf(void *arr, int increment, int itemsize) {
       #ifdef STRETCHY_BUFFER_OUT_OF_MEMORY
       STRETCHY_BUFFER_OUT_OF_MEMORY ;
       #endif
-      return (void *) (2*sizeof(int)); // try to force a NULL pointer exception later
+      return (void *) (2*sizeof(int)); /* try to force a NULL ptr ex. later */
    }
 }
-#endif // STB_STRETCHY_BUFFER_H_INCLUDED
+#endif /* STB_STRETCHY_BUFFER_H_INCLUDED */
 
 /* END: stretchy_buffer.h */
 /* ********************** */
@@ -99,76 +99,75 @@ static void * stb__sbgrowf(void *arr, int increment, int itemsize) {
 /* **** */
 
 /**
- * Used in my prefix-tree data structures.
+ * Stores a character, related meta-data and trie parent-sibling indices used
+ * in the prefix-tree data structure.
  *
- * We do "relative indices" with signed 8 bits of -127..127
+ * This is 32 bits with the following bit fields.
+ *
+ * kkkkkkkk ssmmmmmm cccccccc nnnnnnnn
+ *
+ * - k is the bits of the encoded character.
+ * - s are sign bits of 'c' and 'n' (defines if we do sub or add)
+ * - m is [1..63] "meta" index for finding the linked values. 0 == no word end!
+ * - c is UNSIGNED relative offset of (first) child. When zero no child.
+ * - n is UNSIGNED relative offset of "next" sibling. When zero nomore sibling.
+ *
+ * So we do "relative indices" with signed 9 bits of -255..255
  * for the child indices to keep everything in the strechy
  * buffer for cache locality instead of spreading all around.
  *
- * When indices grow too big, the special value of -128 will
- * mean that index is stored as a WHOLE METACHAR (4 bytes),
- * right after this metachar.
+ * When indices grow too big, the special value of "-0" (top meta "s" bit and
+ * c bits all zeroes) mean that index is stored as 2 WHOLE METACHAR (2x4 bytes)
+ * right after this metachar as 32 bit absolute indices.
  *
- * TODO:  I will figure it out that if I am using 16 bits of
- * that for each index is better or two full 4 bytes is...
+ * Rem.: The second sign bit being set to 1 and nnn.. bits being non-zero is
+ *       UNUSED and currently impossible. Just "ignore" it. Possible extension.
  */
 struct metachar {
 	/** The stored byte (character) */
-	unsigned char kar;
+	SE_UCHAR kar;
 	/**
-	 * Defines if a "word" (key) ends here or not. If non-zero, a word end.
+	 * Defines if a "word" (key) ends here or not.
+	 * If lowest 6 bits is  non-zero, a stored (key) word ends here.
 	 *
-	 * In case of word ends the value here is an index to stored "values"
-	 * lists so you can just look up what values are stored for the key
-	 * that ends by this character. In the special case of the value  255,
-	 * You need to do a pointer based lookup however! Then there were so
-	 * many "values" stored in the system that there are more than 0..254
-	 * and the lookup will happen based on hashing into buckets and
-	 * searching the corresponding value-list through simple 254-way hash.
+	 * In case of word ends the value here is PART of bits of an index to
+	 * the stored "values" lists so you can just look up what values are 
+	 * stored for the key that ends by this character. Those lists are all
+	 * ptr-value pairs, so you need to look up the current address of this
+	 * metachar and use the corresponding value AFTER you got the "bucket".
 	 *
-	 * Examples:
+	 * The top 2 bits are two sign bits for lo_child and lo_next. And thus
+	 * defines if they are subtracted or added to current index as offset.
 	 *
-	 * - Value of 0 means no keys end at this position. Even if you would
-	 *   find a full match until now, you only found a stored key being a
-	 *   prefix of the search term if you get to this point.
-	 * - A value of 3 means that you can grab all value_set.fastvals
-	 * - A value of 255 means that you need to generate a hash from the
-	 *   pointer / location of this metachar in the prefix_tree and use
-	 *   this pointer to hash into 0..255 buckets where strechy buffers
-	 *   contain N number of pointers. A (linear?) search is to be done on
-	 *   the pointers and if found the pointer of the metachar, in question
-	 *   the other ptr buffer near the pointer - so buckets have two
-	 *   pointers per ptr: the pointer to compare and the one as strechbuf
-	 *   - will contain the streachy-buffer of all the values for this key.
-	 *
+	 * Rem.:
+	 * - The first sign bit belongs to child and second to next fields.
+	 * - As said above in metachar docs, "-0" values (s bit == 1 but child
+	 *   or next is zero) are having a special meaning when lo_child/next
+	 *   is not used and 32 bit absolute indices follow as full metachars!
 	 */
-	unsigned char meta;
+	SE_UCHAR meta;
 	/**
-	 * Relative index for a child node (-127..127).
+	 * Relative index for a child node (-255..255).
 	 * - key continuation can be found in this direction.
+	 * - sign of this is lowest bit of "meta"!
 	 *
-	 * Here special -128 means next two metachar is two 32 bit absolute
-	 * index in the stretchy_buffer of metachars!
-	 *
-	 * Also the special value of 0 (zero) means no childs.
+	 * The special value of 0 (zero) means no childs, except if s == 1.
 	 */
-	signed char lo_child;
+	SE_UCHAR lo_child;
 	/**
 	 * Relative index to the next sibling node (-127..127).
 	 * - leads to keys with positional alternative.
-	 *
-	 * Here special -128 means next two metachar is two 32 bit absolute
-	 * index in the stretchy_buffer of metachars!
+	 * - sign of this is second-lowest bit of "meta"!
 	 *
 	 * Also the special value of 0 (zero) means no (further) siblings.
 	 */
-	signed char lo_next;
+	SE_UCHAR lo_next;
 };
 
 /** The internal prefix tree with substring lookup support */
 struct prefix_tree {
 	/**
-	 * Pointers to metachar-strechybuffers for each starting char / byte.
+	 * Points into the main metachar-strechybuffer for starting char/bytes.
 	 *
 	 * 256 pointers to starts of keys practically.
 	 *
@@ -181,6 +180,8 @@ struct prefix_tree {
 	metachar *top_levels[256] = { 0 }; // zero-init all ptrs
 
 	/**
+	 * Substring start position lists for each char.
+	 *
 	 * 256 pointers to "lists" (strechy_buffers) of pointers for each
 	 * possible char start for substring support. This is 256 lists and
 	 * all lists contains their character occurences in the prefix-tree.
@@ -207,30 +208,93 @@ struct ptr_valuesbuf_pair {
 	void **valuesbuf;
 };
 
+/** A hash value. Struct to enable improvements later if needed */
+struct metahash {
+	// TODO: We can change type easily here if needed for performance.
+	unsigned int index;
+};
+
 /** The values for the keys are stored here - support few-value optimization */
 struct value_set {
-	/** Fastaccess to first 254 values. Better be the most common ones! */
-	void *fastvals[254];
-
-	/*
-	 * TODO: maybe having this simple hashing as 64-way and doing more
-	 * linear searching is actually better because of cache efficiency?
-	 */
-	/* TODO: Maybe make it possible to sort lists (key_end_ptr binsearc) */
+	/* TODO: Maybe make it possible to sort lists for binary search */
 	/**
-	 * Slower access to non-first values.
+	 * Value buckets. See metachar docs for further understanding!
 	 *
-	 * This is basically a really-really simple 256-way hash and you need
-	 * to hash the address of the key-ending metachar down to a single
-	 * unsigned byte then index into this array to get the corresponding
-	 * bucket. If you are there, you need a linear search to compare the
-	 * buckets
+	 * This is basically a single-level hash:
+	 * - Use metahash hash_metachar(metachar *mc) to get hash key (indexin)
+	 * - After found the right bucket, just linear search in it.
 	 */
-	ptr_valuesbuf_pair *slowvals[256];
+	ptr_valuesbuf_pair *buckets[1024]; /* See: (*****) */
 
-	/** Number of currently stored values - used for few-value opt */
-	unsigned int valueNum;
+	/** Number of currently stored values - used for meta-generation */
+	unsigned int value_num;
 };
+
+/** Helper fun */
+static SE_BOOL get_child_sign(SE_UCHAR meta) {
+	return ((meta & 0x80) != 0) ? se_true : se_false;
+}
+
+/** Helper fun */
+static void set_child_sign(SE_UCHAR *meta_to_change, SE_BOOL value) {
+	meta_to_change = (value) ?
+		(meta_to_change | 0x80):
+		(meta_to_change & 0x7F);
+}
+
+/** Helper fun */
+static SE_BOOL get_next_sign(SE_UCHAR meta) {
+	return ((meta & 0x40) != 0) ? se_true : se_false;
+}
+
+/** Helper fun */
+static void set_next_sign(SE_UCHAR *meta_to_change, SE_BOOL value) {
+	meta_to_change = (value) ?
+		(meta_to_change | 0x40):
+		(meta_to_change & 0xbF);
+}
+
+/** Helper fun: returns low 6 bits only */
+static SE_UCHAR get_meta_bits(SE_UCHAR meta) {
+	return meta &= 0x3F;
+}
+
+
+/** Helper fun: Sets low 6 bits to given 6-bit value (handles 6b overflow) */
+static void set_meta_bits(SE_UCHAR *meta_to_change, SE_UCHAR value) {
+	value = get_meta_bits(value) /* defensive code */
+	*meta_to_change &= 0xc0; /* Erase all but top two bits */
+	*meta_to_change |= value; /* Set the 6 bits */
+}
+
+/** HASH: Helper fun */
+static metahash hash_metachar(metachar *mc) {
+	metahash mh;
+
+	/* TODO: Can complicate this further if more range needed, in the
+	 *       worst case can even use the address of the pointer, but
+	 *       first just the unused bits from the "kar".
+	 */
+
+	/* Currently: 10 bit [0..1023] bucket indices.
+	 * - 4 bitz from the last char of in the prefixtree
+	 * - 6 bitz from the "meta" bits that are not sign bits
+	 * See: (*****)
+	 */
+	static const SE_UCHAR kar_bitz = 4;
+	static const SE_UCHAR bit_keeper = (0xFF) >> (8-kar_bitz);
+
+	/* Calculation is here and is quite simple */
+	mh.index = ((mc->kar) & bit_keeper) << kar_bitz; // top "kar_bitz" bits
+	mh.index += (unsigned int)get_meta_bits(mc->meta); // lower 6 bits
+
+	return mh;
+}
+
+/** Helper to get lower bits of "meta" generated on new key ends */
+static SE_UCHAR generate_meta_bits_for(value_set *current_value_set) {
+	return get_meta_bits((SE_UCHAR)current_value_set->value_num);
+}
 
 /** 
  * The full state of the search engine.

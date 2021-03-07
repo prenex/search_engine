@@ -1,7 +1,7 @@
 #ifndef SEARCH_ENGINE_H
 #define SEARCH_ENGINE_H
 /*
- * search_engine.h version 1.0
+ * search_engine.h version 0.2
  *
  * Simple single-header and single-c search engine library
  * which lets you use prefix/infix/suffix (partial) search
@@ -28,7 +28,26 @@
  * Owner, CEO - MagosIT Kft (Hungary)
  */
 
-typedef enum { false, true } SE_BOOL;
+#ifndef NO_MODERN_TYPEZ
+/* DEFAULT: Modern compiler - cleaner: use stdint.h */
+
+#include "stdint.h"
+#define SE_UCHAR uint8_t
+#define SE_CHAR int8_t
+#define SE_WORD uint16_t
+#define SE_DWORD uint32_t
+
+#else
+
+/* OPTIONAL: Non-modern compiler - do not use uint8_t and such! */
+#define SE_UCHAR unsigned char
+#define SE_UCHAR char
+#define SE_WORD unsigned short
+#define SE_DWORD unsigned int
+
+#endif /* NO_MODERN_TYPEZ */
+
+typedef enum { se_false, se_true } SE_BOOL;
 
 /** Result of a search */
 struct search_engine_result {
@@ -73,7 +92,7 @@ void search_engine_shutdown(void *handle);
  */
 void *search_engine_add(
 		void *handle,
-	       	const char *key,
+		const SE_CHAR *key,
 		unsigned int value_count,
 	       	void **values);
 
@@ -96,7 +115,7 @@ void *search_engine_add(
  */
 search_engine_result search_engine(
 		void *handle,
-	       	const char *key,
+		const SE_CHAR *key,
 	       	SE_BOOL substr_support,
 	       	SE_BOOL try_ignore_case);
 
